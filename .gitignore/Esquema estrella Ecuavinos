@@ -1,0 +1,134 @@
+/*==============================================================*/
+/* DBMS name:			   EcuaVinosDW		                    */
+/*==============================================================*/
+
+use master 
+go
+
+drop database  if exists EcuaVinosDW
+go
+
+create database EcuaVinosDW 
+go
+
+use EcuaVinosDW
+go
+
+/*==============================================================*/
+/* Table: dimcliente                                            */
+/*==============================================================*/
+create table dimcliente (
+   cliente_id           char(5)              not null,
+   nombre               varchar(25)          not null,
+   tipo                 varchar(50)          not null,
+   constraint pk_dimcliente primary key (cliente_id)
+)
+go
+
+/*==============================================================*/
+/* Table: dimfecha                                              */
+/*==============================================================*/
+create table dimfecha (
+   fecha_id             numeric              not null,
+   fecha                datetime             not null,
+   fecha_uk             char(10)             null,
+   fecha_usa            char(10)             null,
+   dia_del_mes          varchar(2)           null,
+   sufijo_dia           varchar(4)           null,
+   nombre_dia           varchar(9)           null,
+   dia_de_semana_USA    char(1)              null,
+   dia_de_semana_UK     char(1)              null,
+   dia_de_semana_en_mes varchar(2)           null,
+   dia_de_semana_en_anio varchar(2)           null,
+   dia_del_trimestre    varchar(3)           null,
+   dia_del_anio         varchar(3)           null,
+   semana_del_mes       varchar(1)           null,
+   semana_del_trimestre varchar(2)           null,
+   semana_del_anio      varchar(2)           null,
+   mes                  varchar(2)           null,
+   nombre_mes           varchar(9)           null,
+   trimestre_del_mes    varchar(2)           null,
+   trimestre            char(1)              null,
+   nombre_trismestre    varchar(9)           null,
+   anio                 char(4)              null,
+   nombre_anio          char(7)              null,
+   mes_anio             char(10)             null,
+   mm_yyyy              char(6)              null,
+   primer_dia_del_mes   datetime             null,
+   ultimo_dia_del_mes   datetime             null,
+   primer_dia_del_trimestre datetime             null,
+   ultimo_dia_del_trimestre datetime             null,
+   primer_dia_del_anio  datetime             null,
+   ultimo_dia_del_anio  datetime             null,
+   es_feriado_usa       bit                  null,
+   es_dia_laborable     bit                  null,
+   feriado_usa          varchar(50)          null,
+   es_feriado_uk        bit                  null,
+   feriado_uk           varchar(50)          null,
+   constraint pk_dimfecha primary key (fecha_id)
+)
+go
+
+/*==============================================================*/
+/* Table: dimmercado                                            */
+/*==============================================================*/
+create table dimmercado (
+   mercado_id           numeric              not null       IDENTITY(1,1),
+   direccion_de_entrega varchar(50)          not null,
+   mercado				varchar(25)          not null,
+   codigo_postal        varchar(15)          not null,
+   constraint pk_dimmercado primary key (mercado_id)
+)
+go
+
+/*==============================================================*/
+/* Table: dimproducto                                           */
+/*==============================================================*/
+create table dimproducto (
+   producto_id_comp     char(10)             not null,
+   codigo_id            char(6)              not null,
+   descripcion_pro      varchar(50)          not null,
+   precio_por_unidad    money                not null,
+   costo_por_docena     money                not null,
+   grupo                varchar(15)          not null,
+   volumen_de_produccion int                  not null,
+   anio                 char(4)              not null,
+   constraint pk_dimproducto primary key (producto_id_comp)
+)
+go
+
+/*==============================================================*/
+/* Table: factdetalleventa                                      */
+/*==============================================================*/
+create table factdetalleventa (
+   transaccion_id       int    Primary Key   not null IDENTITY(1,1),
+   cliente_id           char(5)              not null,
+   fecha_id             numeric              not null,
+   producto_id_comp     char(10)             not null,
+   mercado_id           numeric              not null,
+   numero_de_orden      varchar(10)          not null,
+   cantidad             int                  not null, 
+   total_ventas         money                not null,
+)
+go
+
+alter table factdetalleventa
+   add constraint fk_factdeta_relations_dimprodu foreign key (producto_id_comp)
+      references dimproducto (producto_id_comp)
+go
+
+alter table factdetalleventa
+   add constraint fk_factdeta_relations_dimclien foreign key (cliente_id)
+      references dimcliente (cliente_id)
+go
+
+alter table factdetalleventa
+   add constraint fk_factdeta_relations_dimfecha foreign key (fecha_id)
+      references dimfecha (fecha_id)
+go
+
+alter table factdetalleventa
+   add constraint fk_factdeta_relations_dimmerca foreign key (mercado_id)
+      references dimmercado (mercado_id)
+go
+
