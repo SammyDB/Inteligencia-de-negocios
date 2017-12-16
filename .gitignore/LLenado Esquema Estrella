@@ -1,0 +1,600 @@
+use master
+go
+
+set language 'us_english'
+go
+
+use EcuaVinosDW
+go
+
+/*******************************************************/
+/*                     DimCliente                      */
+/*******************************************************/
+
+insert into dimcliente (cliente_id, nombre, tipo)
+	select cliente_id, nombre, tipo from [VentasComerciantes].dbo.cliente
+
+
+/*******************************************************/
+/*                    DimProducto                      */
+/*******************************************************/
+
+
+/*
+	select * from [VentasComerciantes].dbo.producto       --Producto_Id_com, codigo_ID, Descripcion, costo por Unitario
+	select * from [Produccion].dbo.producto               --Grupo
+	select * from [Produccion].dbo.historialdeproduccion  --Volumen de produccion, anio, costo por docena, 
+*/
+--vista de la union entre productos e historial de produccion
+use Produccion
+go
+
+drop view if exists productos_produccion
+go
+
+create view productos_produccion
+as
+select replace(concat('P',pro.codigo,hist_pro.anio),' ','') as codigo_comp, pro.codigo, pro.descripcion, 
+pro.grupo, hist_pro.anio, hist_pro.volumen_de_produccion, hist_pro.costo_por_docena 
+from Produccion.dbo.producto pro inner join Produccion.dbo.historialdeproduccion hist_pro on pro.codigo=hist_pro.codigo;
+go
+
+use EcuaVinosDW
+go
+
+--select * from Produccion.dbo.productos_produccion prod_pro order by prod_pro.codigo_comp
+--select * from VentasComerciantes.dbo.producto ven_com_pro order by ven_com_pro.producto_id_comp
+
+-- insercion
+insert into EcuaVinosDW.dbo.dimproducto (producto_id_comp, codigo_id, descripcion_pro, precio_por_unidad,
+costo_por_docena, grupo, volumen_de_produccion, anio) 
+select prod_pro.codigo_comp, ven_com_pro.producto_id, prod_pro.descripcion, ven_com_pro.precio_por_unidad, 
+prod_pro.costo_por_docena,  prod_pro.grupo, prod_pro.volumen_de_produccion, prod_pro.anio
+from  Produccion.dbo.productos_produccion prod_pro full outer join VentasComerciantes.dbo.producto ven_com_pro 
+on prod_pro.codigo_comp=ven_com_pro.producto_id_comp
+go
+
+-- select * from EcuaVinosDW.dbo.dimproducto;
+
+-- select * from dimproducto
+
+
+	
+/*******************************************************/
+/*                   DimMercado                        */
+/*******************************************************/
+
+-- select * from dimmercado
+ 
+insert into dimmercado (direccion_de_entrega, mercado, codigo_postal)
+	select C.direccion, C.mercado, C.codigo_postal from [VentasComerciantes].dbo.cliente C
+ 
+-- select * from dimmercado
+/*select * from [VentasComerciantes].dbo.ordendecompra
+select * from [VentasComerciantes].dbo.cliente
+*/
+
+/*******************************************************/
+/*		             DimFecha                          */
+/*******************************************************/
+
+-- select * from dimfecha
+
+--Specify Start Date and End date here
+--Value of Start Date Must be Less than Your End Date 
+
+DECLARE @StartDate DATETIME = '01/01/2012' --Starting value of Date Range
+DECLARE @EndDate DATETIME = '01/01/2015' --End Value of Date Range
+
+--Temporary Variables To Hold the Values During Processing of Each Date of Year
+DECLARE
+	@DayOfWeekInMonth INT,
+	@DayOfWeekInYear INT,
+	@DayOfQuarter INT,
+	@WeekOfMonth INT,
+	@CurrentYear INT,
+	@CurrentMonth INT,
+	@CurrentQuarter INT
+
+/*Table Data type to store the day of week count for the month and year*/
+DECLARE @DayOfWeek TABLE (DOW INT, MonthCount INT, QuarterCount INT, YearCount INT)
+
+INSERT INTO @DayOfWeek VALUES (1, 0, 0, 0)
+INSERT INTO @DayOfWeek VALUES (2, 0, 0, 0)
+INSERT INTO @DayOfWeek VALUES (3, 0, 0, 0)
+INSERT INTO @DayOfWeek VALUES (4, 0, 0, 0)
+INSERT INTO @DayOfWeek VALUES (5, 0, 0, 0)
+INSERT INTO @DayOfWeek VALUES (6, 0, 0, 0)
+INSERT INTO @DayOfWeek VALUES (7, 0, 0, 0)
+
+--Extract and assign part of Values from Current Date to Variable
+
+DECLARE @CurrentDate AS DATETIME = @StartDate
+SET @CurrentMonth = DATEPART(MM, @CurrentDate)
+SET @CurrentYear = DATEPART(YY, @CurrentDate)
+SET @CurrentQuarter = DATEPART(QQ, @CurrentDate)
+
+/********************************************************************************************/
+
+--Proceed only if Start Date(Current date ) is less than End date you specified above
+
+WHILE @CurrentDate < @EndDate
+BEGIN
+ 
+/*Begin day of week logic*/
+
+         /*Check for Change in Month of the Current date if Month changed then 
+          Change variable value*/
+	IF @CurrentMonth != DATEPART(MM, @CurrentDate) 
+	BEGIN
+		UPDATE @DayOfWeek
+		SET MonthCount = 0
+		SET @CurrentMonth = DATEPART(MM, @CurrentDate)
+	END
+
+        /* Check for Change in Quarter of the Current date if Quarter changed then change 
+         Variable value*/
+
+	IF @CurrentQuarter != DATEPART(QQ, @CurrentDate)
+	BEGIN
+		UPDATE @DayOfWeek
+		SET QuarterCount = 0
+		SET @CurrentQuarter = DATEPART(QQ, @CurrentDate)
+	END
+       
+        /* Check for Change in Year of the Current date if Year changed then change 
+         Variable value*/
+	
+
+	IF @CurrentYear != DATEPART(YY, @CurrentDate)
+	BEGIN
+		UPDATE @DayOfWeek
+		SET YearCount = 0
+		SET @CurrentYear = DATEPART(YY, @CurrentDate)
+	END
+	
+        -- Set values in table data type created above from variables 
+
+	UPDATE @DayOfWeek
+	SET 
+		MonthCount = MonthCount + 1,
+		QuarterCount = QuarterCount + 1,
+		YearCount = YearCount + 1
+	WHERE DOW = DATEPART(DW, @CurrentDate)
+
+	SELECT
+		@DayOfWeekInMonth = MonthCount,
+		@DayOfQuarter = QuarterCount,
+		@DayOfWeekInYear = YearCount
+	FROM @DayOfWeek
+	WHERE DOW = DATEPART(DW, @CurrentDate)
+	
+/*End day of week logic*/
+
+
+/* Populate Your Dimension Table with values*/
+
+/***************************************************************************************/
+
+	INSERT INTO [dbo].[dimfecha] 
+	SELECT
+		
+		CONVERT (char(8),@CurrentDate,112) as DateKey,
+		@CurrentDate AS Date,
+		CONVERT (char(10),@CurrentDate,103) as FullDateUK,
+		CONVERT (char(10),@CurrentDate,101) as FullDateUSA,
+		DATEPART(DD, @CurrentDate) AS DayOfMonth,
+		--Apply Suffix values like 1st, 2nd 3rd etc..
+		CASE 
+			WHEN DATEPART(DD,@CurrentDate) IN (11,12,13) THEN CAST(DATEPART(DD,@CurrentDate) AS VARCHAR) + 'th'
+			WHEN RIGHT(DATEPART(DD,@CurrentDate),1) = 1 THEN CAST(DATEPART(DD,@CurrentDate) AS VARCHAR) + 'st'
+			WHEN RIGHT(DATEPART(DD,@CurrentDate),1) = 2 THEN CAST(DATEPART(DD,@CurrentDate) AS VARCHAR) + 'nd'
+			WHEN RIGHT(DATEPART(DD,@CurrentDate),1) = 3 THEN CAST(DATEPART(DD,@CurrentDate) AS VARCHAR) + 'rd'
+			ELSE CAST(DATEPART(DD,@CurrentDate) AS VARCHAR) + 'th' 
+			END AS DaySuffix,
+		
+		DATENAME(DW, @CurrentDate) AS DayName,
+		DATEPART(DW, @CurrentDate) AS DayOfWeekUSA,
+		-- check for day of week as Per US and change it as per UK format 
+		CASE DATEPART(DW, @CurrentDate)
+			WHEN 1 THEN 7
+			WHEN 2 THEN 1
+			WHEN 3 THEN 2
+			WHEN 4 THEN 3
+			WHEN 5 THEN 4
+			WHEN 6 THEN 5
+			WHEN 7 THEN 6
+			END 
+			AS DayOfWeekUK,
+		
+		@DayOfWeekInMonth AS DayOfWeekInMonth,
+		@DayOfWeekInYear AS DayOfWeekInYear,
+		@DayOfQuarter AS DayOfQuarter,
+		DATEPART(DY, @CurrentDate) AS DayOfYear,
+		DATEPART(WW, @CurrentDate) + 1 - DATEPART(WW, CONVERT(VARCHAR, DATEPART(MM, @CurrentDate)) + '/1/' + CONVERT(VARCHAR, DATEPART(YY, @CurrentDate))) AS WeekOfMonth,
+		(DATEDIFF(DD, DATEADD(QQ, DATEDIFF(QQ, 0, @CurrentDate), 0), @CurrentDate) / 7) + 1 AS WeekOfQuarter,
+		DATEPART(WW, @CurrentDate) AS WeekOfYear,
+		DATEPART(MM, @CurrentDate) AS Month,
+		DATENAME(MM, @CurrentDate) AS MonthName,
+		CASE
+			WHEN DATEPART(MM, @CurrentDate) IN (1, 4, 7, 10) THEN 1
+			WHEN DATEPART(MM, @CurrentDate) IN (2, 5, 8, 11) THEN 2
+			WHEN DATEPART(MM, @CurrentDate) IN (3, 6, 9, 12) THEN 3
+			END AS MonthOfQuarter,
+		DATEPART(QQ, @CurrentDate) AS Quarter,
+		CASE DATEPART(QQ, @CurrentDate)
+			WHEN 1 THEN 'First'   --Primero
+			WHEN 2 THEN 'Second'  --Segundo
+			WHEN 3 THEN 'Third'   --Tercero
+			WHEN 4 THEN 'Fourth'  --Cuarto
+			END AS QuarterName,
+		DATEPART(YEAR, @CurrentDate) AS Year,
+		'CY ' + CONVERT(VARCHAR, DATEPART(YEAR, @CurrentDate)) AS YearName,
+		LEFT(DATENAME(MM, @CurrentDate), 3) + '-' + CONVERT(VARCHAR, DATEPART(YY, @CurrentDate)) AS MonthYear,
+		RIGHT('0' + CONVERT(VARCHAR, DATEPART(MM, @CurrentDate)),2) + CONVERT(VARCHAR, DATEPART(YY, @CurrentDate)) AS MMYYYY,
+		CONVERT(DATETIME, CONVERT(DATE, DATEADD(DD, - (DATEPART(DD, @CurrentDate) - 1), @CurrentDate))) AS FirstDayOfMonth,
+		CONVERT(DATETIME, CONVERT(DATE, DATEADD(DD, - (DATEPART(DD, (DATEADD(MM, 1, @CurrentDate)))), DATEADD(MM, 1, @CurrentDate)))) AS LastDayOfMonth,
+		DATEADD(QQ, DATEDIFF(QQ, 0, @CurrentDate), 0) AS FirstDayOfQuarter,
+		DATEADD(QQ, DATEDIFF(QQ, -1, @CurrentDate), -1) AS LastDayOfQuarter,
+		CONVERT(DATETIME, '01/01/' + CONVERT(VARCHAR, DATEPART(YY, @CurrentDate))) AS FirstDayOfYear,
+		CONVERT(DATETIME, '12/31/' + CONVERT(VARCHAR, DATEPART(YY, @CurrentDate))) AS LastDayOfYear,
+		NULL AS IsHolidayUSA,
+		CASE DATEPART(DW, @CurrentDate)
+			WHEN 1 THEN 0
+			WHEN 2 THEN 1
+			WHEN 3 THEN 1
+			WHEN 4 THEN 1
+			WHEN 5 THEN 1
+			WHEN 6 THEN 1
+			WHEN 7 THEN 0
+			END AS IsWeekday,
+		NULL AS HolidayUSA, Null, Null
+
+	
+	SET @CurrentDate = DATEADD(DD, 1, @CurrentDate) 
+END
+
+
+/*Add HOLIDAYS UK*/
+	
+-- Good Friday  April 18 
+	UPDATE [dbo].[dimfecha]
+		SET feriado_uk = 'Good Friday'
+	WHERE [mes] = 4 AND [dia_del_mes]  = 18
+-- Easter Monday  April 21 
+	UPDATE [dbo].[dimfecha]
+		SET feriado_uk = 'Easter Monday'
+	WHERE [mes] = 4 AND [dia_del_mes]  = 21
+-- Early May Bank Holiday   May 5 
+   UPDATE [dbo].[dimfecha]
+		SET feriado_uk = 'Early May Bank Holiday'
+	WHERE [mes] = 5 AND [dia_del_mes]  = 5
+-- Spring Bank Holiday  May 26 
+	UPDATE [dbo].[dimfecha]
+		SET feriado_uk = 'Spring Bank Holiday'
+	WHERE [mes] = 5 AND [dia_del_mes]  = 26
+-- Summer Bank Holiday  August 25 
+    UPDATE [dbo].[dimfecha]
+		SET feriado_uk = 'Summer Bank Holiday'
+	WHERE [mes] = 8 AND [dia_del_mes]  = 25
+-- Boxing Day  December 26  	
+    UPDATE [dbo].[dimfecha]
+		SET feriado_uk = 'Boxing Day'
+	WHERE [mes] = 12 AND [dia_del_mes]  = 26	
+--CHRISTMAS
+	UPDATE [dbo].[dimfecha]
+		SET feriado_uk = 'Christmas Day'
+	WHERE [mes] = 12 AND [dia_del_mes]  = 25
+--New Years Day
+	UPDATE [dbo].[dimfecha]
+		SET feriado_uk  = 'New Year''s Day'
+	WHERE [mes] = 1 AND [dia_del_mes] = 1
+	
+	UPDATE [dbo].[dimfecha] 
+	SET es_feriado_uk = CASE WHEN feriado_uk IS NULL THEN 0 WHEN feriado_uk IS NOT NULL THEN 1 END 
+
+
+	/*Add HOLIDAYS USA*/
+	/*THANKSGIVING - Fourth THURSDAY in November*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Thanksgiving Day'
+	WHERE
+		[mes] = 11 
+		AND [dia_de_semana_USA] = 'Thursday' 
+		AND dia_de_semana_en_mes = 4
+
+	/*CHRISTMAS*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Christmas Day'
+		
+	WHERE [mes] = 12 AND [dia_del_mes]  = 25
+
+	/*4th of July*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Independance Day'
+	WHERE [mes] = 7 AND [dia_del_mes] = 4
+
+	/*New Years Day*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'New Year''s Day'
+	WHERE [mes] = 1 AND [dia_del_mes] = 1
+
+	/*Memorial Day - Last Monday in May*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Memorial Day'
+	FROM [dbo].[dimfecha]
+	WHERE fecha_id IN 
+		(
+		SELECT
+			MAX(fecha_id)
+		FROM [dbo].[dimfecha]
+		WHERE
+			[nombre_mes] = 'May'
+			AND [dia_de_semana_USA]  = 'Monday'
+		GROUP BY
+			[anio],
+			[mes]
+		)
+
+	/*Labor Day - First Monday in September*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Labor Day'
+	FROM [dbo].[dimfecha]
+	WHERE fecha_id IN 
+		(
+		SELECT
+			MIN(fecha_id)
+		FROM [dbo].[dimfecha]
+		WHERE
+			[nombre_mes] = 'September'
+			AND [dia_de_semana_USA] = 'Monday'
+		GROUP BY
+			[anio],
+			[mes]
+		)
+
+	/*Valentine's Day*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Valentine''s Day'
+	WHERE
+		[mes] = 2 
+		AND [dia_del_mes] = 14
+
+	/*Saint Patrick's Day*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Saint Patrick''s Day'
+	WHERE
+		[mes] = 3
+		AND [dia_del_mes] = 17
+
+	/*Martin Luthor King Day - Third Monday in January starting in 1983*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Martin Luthor King Jr Day'
+	WHERE
+		[mes] = 1
+		AND [dia_de_semana_USA]  = 'Monday'
+		AND [anio] >= 1983
+		AND dia_de_semana_en_mes = 3
+		
+	/*President's Day - Third Monday in February*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'President''s Day'
+	WHERE
+		[mes] = 2
+		AND [dia_de_semana_USA] = 'Monday'
+		AND dia_de_semana_en_mes = 3
+
+	/*Mother's Day - Second Sunday of May*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Mother''s Day'
+	WHERE
+		[mes] = 5
+		AND [dia_de_semana_USA] = 'Sunday'
+		AND dia_de_semana_en_mes = 2
+
+	/*Father's Day - Third Sunday of June*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Father''s Day'
+	WHERE
+		[mes] = 6
+		AND [dia_de_semana_USA] = 'Sunday'
+		AND dia_de_semana_en_mes = 3
+
+	/*Halloween 10/31*/
+	UPDATE [dbo].[dimfecha]
+		SET feriado_usa = 'Halloween'
+	WHERE
+		[mes] = 10
+		AND [dia_del_mes] = 31
+
+
+	/*Election Day - The first Tuesday after the first Monday in November*/
+	BEGIN
+		DECLARE @Holidays TABLE (ID INT IDENTITY(1,1), DateID int, Week TINYINT, YEAR CHAR(4), DAY CHAR(2))
+
+		INSERT INTO @Holidays(DateID, [Year],[Day])
+		SELECT
+			fecha_id,
+			[anio],
+			[dia_del_mes] 
+		FROM [dbo].[dimfecha]
+		WHERE
+			[mes] = 11
+			AND [dia_de_semana_USA] = 'Monday'
+		ORDER BY
+			anio,
+			dia_del_mes 
+
+		DECLARE @CNTR INT, @POS INT, @STARTYEAR INT, @ENDYEAR INT, @MINDAY INT
+
+		SELECT
+			@CURRENTYEAR = MIN([Year])
+			, @STARTYEAR = MIN([Year])
+			, @ENDYEAR = MAX([Year])
+		FROM @Holidays
+
+		WHILE @CURRENTYEAR <= @ENDYEAR
+		BEGIN
+			SELECT @CNTR = COUNT([Year])
+			FROM @Holidays
+			WHERE [Year] = @CURRENTYEAR
+
+			SET @POS = 1
+
+			WHILE @POS <= @CNTR
+			BEGIN
+				SELECT @MINDAY = MIN(DAY)
+				FROM @Holidays
+				WHERE
+					[Year] = @CURRENTYEAR
+					AND [Week] IS NULL
+
+				UPDATE @Holidays
+					SET [Week] = @POS
+				WHERE
+					[Year] = @CURRENTYEAR
+					AND [Day] = @MINDAY
+
+				SELECT @POS = @POS + 1
+			END
+
+			SELECT @CURRENTYEAR = @CURRENTYEAR + 1
+		END
+
+		UPDATE [dbo].[dimfecha]
+			SET feriado_usa  = 'Election Day'				
+		FROM [dbo].[dimfecha] DT
+			JOIN @Holidays HL ON (HL.DateID + 1) = DT.fecha_id
+		WHERE
+			[Week] = 1
+	END
+	
+	UPDATE [dbo].[dimfecha]
+		SET es_feriado_usa = CASE WHEN feriado_usa  IS NULL THEN 0 WHEN feriado_usa  IS NOT NULL THEN 1 END
+	
+
+-- select * from dimfecha
+
+alter table dimfecha add es_feriado_ec BIT NULL, feriado_ec varchar(50) NULL
+go
+	
+	/*Add HOLIDAYS ECU*/
+-- NEW YEARS DAY 
+	UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'New Years Day'
+	WHERE [mes] = 1 AND [dia_del_mes]  = 1
+-- carnaval 
+	UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Carnaval'
+	WHERE [mes] = 2 AND [dia_del_mes]  = 27
+--carnaval
+	UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Carnaval.'
+	WHERE [mes] = 2 AND [dia_del_mes]  = 28
+-- viernes santo14 abril 
+   UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Viernes Santo'
+	WHERE [mes] = 4 AND [dia_del_mes]  = 14
+-- Dia del trabajo 
+	UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Dia del Trabajo'
+	WHERE [mes] = 1 AND [dia_del_mes]  = 5
+-- Batalla de pichincha
+    UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Batalla de Pichincha'
+	WHERE [mes] = 5 AND [dia_del_mes]  = 24
+-- Primer Grito de l a independencia  	
+    UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Primer Grito de la Independencia'
+	WHERE [mes] = 8 AND [dia_del_mes]  = 10	
+	--Independencia de Guayaquil
+    UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Independencia de Guayaquil'
+	WHERE [mes] = 10 AND [dia_del_mes]  = 9
+
+	--Independencia de Cuenca
+    UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Independcia de Cuenca'
+	WHERE [mes] = 11 AND [dia_del_mes]  = 3
+
+	--Día de los difuntos
+    UPDATE [dbo].[dimfecha]
+		SET feriado_ec = 'Día de los Difuntos'
+	WHERE [mes] = 11 AND [dia_del_mes]  = 2
+
+	UPDATE [dbo].[dimfecha] 
+	SET es_feriado_ec = CASE WHEN feriado_ec IS NULL THEN 0 WHEN feriado_ec IS NOT NULL THEN 1 END 
+
+	--select * from dimfecha
+
+
+/**************************************************/
+/*            VISTAORDENESTOTALES                 */
+/**************************************************/
+use VentasComerciantes
+go
+
+drop view if exists vistaOrdenesTotales
+go
+
+create view vistaOrdenesTotales
+as
+select  VC.cliente_id, 
+		VP.producto_id_comp,
+		VDC.numero_de_orden,
+		VOC.fecha,
+		VC.direccion,
+		VDC.cantidad,
+		VDC.precio as precio_unitario,
+		VDC.precio_total
+				
+from  [VentasComerciantes].dbo.ordendecompra as VOC 
+	  Inner Join [VentasComerciantes].dbo.cliente as VC on VOC.cliente_id = VC.cliente_id
+	  Inner Join [VentasComerciantes].dbo.detalleordendecompra as VDC on VOC.numero_de_orden = VDC.numero_de_orden
+	  Inner Join [VentasComerciantes].dbo.producto as VP on VDC.producto_id_comp = VP.producto_id_comp
+go
+
+
+/*
+	select * from factdetalleventa
+
+	select * from [VentasComerciantes].dbo.producto       --Producto_Id_com, codigo_ID, Descripcion, costo por Unitario
+	select * from [VentasComerciantes].dbo.cliente      --Producto_Id_com, codigo_ID, Descripcion, costo por Unitario
+	select * from [VentasComerciantes].dbo.detalleordendecompra       --Producto_Id_com, codigo_ID, Descripcion, costo por Unitario
+	select * from [VentasComerciantes].dbo.ordendecompra      --Producto_Id_com, codigo_ID, Descripcion, costo por Unitario
+	
+*/
+
+--select * from VentasComerciantes.dbo.vistaOrdenesTotales
+
+use EcuaVinosDW
+go
+
+/*******************************************************/
+/*		         Tabla de Hechos                       */
+/*******************************************************/
+--select * from factdetalleventa
+ 
+insert into factdetalleventa (  cliente_id,   --1 
+								fecha_id,     --2
+								producto_id_comp,  --3
+								mercado_id,    --4
+								numero_de_orden,  --5
+								cantidad,  --6
+								total_ventas)  --7
+	select VOT.cliente_id, DF.fecha_id, VOT.producto_id_comp, DM.mercado_id, VOT.numero_de_orden, VOT.cantidad, VOT.precio_total 
+	from VentasComerciantes.dbo.vistaOrdenesTotales VOT
+	inner join dimcliente DC on VOT.cliente_id = DC.cliente_id
+	inner join dimfecha DF on VOT.fecha = DF.fecha
+	inner join dimmercado DM on VOT.direccion = DM.direccion_de_entrega
+	inner join dimproducto DP on VOT.producto_id_comp = DP.producto_id_comp
+	order by DF.fecha_id
+go
+/*
+	select * from dimproducto
+	select * from dimcliente
+	select * from dimmercado
+	select * from dimfecha
+*/
+-- select * from factdetalleventa
+
