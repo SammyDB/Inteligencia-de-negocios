@@ -1,0 +1,171 @@
+/*==============================================================*/
+/* DBMS name:      VentasComerciantes		                    */
+/*==============================================================*/
+
+use master 
+go
+
+set language 'us_english'
+go
+
+drop database  if exists VentasComerciantes
+go
+
+create database VentasComerciantes 
+go
+
+use VentasComerciantes 
+go
+
+/*==============================================================*/
+/* Table: cliente                                               */
+/*==============================================================*/
+create table cliente (
+   cliente_id           char(5)              not null,
+   nombre               varchar(25)          not null,
+   direccion            varchar(50)          not null,
+   codigo_postal        varchar(15)          not null,
+   mercado		        varchar(25)          not null,
+   tipo                 varchar(50)          not null,
+   constraint pk_cliente primary key (cliente_id)
+)
+go
+
+/*==============================================================*/
+/* Table: detalleordendecompra                                  */
+/*==============================================================*/
+create table detalleordendecompra (
+   numero_de_orden      varchar(10)          not null,
+   detalle_id           varchar(10)          not null,
+   producto_id_comp     char(10)             not null,
+   cantidad             int                  not null,
+   descripcion          varchar(50)          not null,
+   precio               money                not null,
+   precio_total         money                not null,
+   constraint pk_detalleordendecompra primary key (numero_de_orden, detalle_id)
+)
+go
+
+/*==============================================================*/
+/* Table: ordendecompra                                         */
+/*==============================================================*/
+create table ordendecompra (
+   numero_de_orden      varchar(10)          not null,
+   cliente_id           char(5)              not null,
+   fecha                date             not null,
+   constraint pk_ordendecompra primary key (numero_de_orden)
+)
+go
+
+/*==============================================================*/
+/* Table: producto                                              */
+/*==============================================================*/
+create table producto (
+   producto_id_comp     char(10)             not null,
+   producto_id          char(6)              not null,
+   descripcion          varchar(50)          not null,
+   precio_por_unidad    money                not null,
+   anio                 smallint             not null,
+   constraint pk_producto primary key (producto_id_comp)
+)
+go
+
+alter table detalleordendecompra
+   add constraint fk_detalleo_pertenece_producto foreign key (producto_id_comp)
+      references producto (producto_id_comp)
+go
+
+alter table detalleordendecompra
+   add constraint fk_detalleo_posee_ordendec foreign key (numero_de_orden)
+      references ordendecompra (numero_de_orden)
+go
+
+alter table ordendecompra
+   add constraint fk_ordendec_realiza_cliente foreign key (cliente_id)
+      references cliente (cliente_id)
+go
+/*==============================================================*/
+/*		   Datos del Sistema de Ventas a Comerciantes		    */
+/*==============================================================*/
+
+--Datos Cliente
+insert into cliente (cliente_id, nombre, direccion, codigo_postal, mercado, tipo) values 
+('C478W', 'Prestige Wines', 'Av. 12 Oct, UIO, EC', '3053', 'Quito', 'Wholesale(venta al por mayor)'),
+('C567R', 'Acme Wine Imports', 'High St, Fullham, London', 'SW6', 'Internacional', 'Retail (venta al por menor)'),
+('C121R', 'Oz Wines', 'Av. Patria e11-456, UIO, EC', '3121', 'Quito', 'Retail'),
+('C479W', 'The Wine Club', 'Joaquina Galarza, UIO, EC', '3051', 'Quito', 'Wholesale'),
+('C128R', 'London Wines', 'The Strand, London', 'EC4', 'Internacional', 'Retail'),
+('C777R', 'Vinos UIO', 'Av. Mariscal Sucre OE34, GYE, EC', '2345', 'Ecuador', 'Retail'),
+('C342W', 'International Wines', 'PO Box 324, Paris', '75008', 'Internacional', 'Wholesale');
+
+
+--Datos Producto
+insert into producto (producto_id_comp, producto_id, descripcion, precio_por_unidad, anio) values 
+('P127652013', 'P12765', 'McDonell Pinot Noir', 120, 2013),
+('P127652012', 'P12765', 'McDonell Pinot Noir', 110, 2012),
+('P127662013', 'P12766', 'Mornington Pinot Noir', 70, 2013),
+('P127662012', 'P12766', 'Mornington Pinot Noir', 65, 2012),
+('P148232013', 'P14823', 'Mornington Pinot Grigio', 140, 2013),
+('P148232012', 'P14823', 'Mornington Pinot Grigio', 110, 2012),
+('P127672013', 'P12767', 'Downunder Pinot Noir', 80, 2013),
+('P127672012', 'P12767', 'Downunder Pinot Noir', 85, 2012),
+('P148272013', 'P14827', 'Downunder Pinot Grigio', 70, 2013),
+('P148272012', 'P14827', 'Downunder Pinot Grigio', 65, 2012),
+('P148212013', 'P14821', 'Downunder Merlot', 100, 2013),
+('P148212012', 'P14821', 'Downunder Merlot', 100, 2012);
+
+
+--Datos Orden de Compra y Detalles
+insert into ordendecompra (numero_de_orden, cliente_id, fecha) values
+('S135', 'C479W', CONVERT(DATETIME, '12-02-2014',105));
+insert into detalleordendecompra (numero_de_orden, detalle_id, producto_id_comp, cantidad, descripcion, precio, precio_total) values 
+('S135', 'S1351','P127652013', 25, 'McDonell Pinot Noir 2013', 160, 4000),
+('S135', 'S1352','P148232012', 30, 'Mornington Pinot Grigio 2012', 110, 3300);
+
+insert into ordendecompra (numero_de_orden, cliente_id, fecha) values
+('S140', 'C128R', CONVERT(DATETIME, '15-02-2014', 105));
+insert into detalleordendecompra (numero_de_orden, detalle_id, producto_id_comp, cantidad, descripcion, precio, precio_total) values 
+('S140', 'S1401', 'P127672013', 30, 'Downunder Pinot Noir 2013', 80, 2400);
+
+insert into ordendecompra (numero_de_orden, cliente_id, fecha) values
+('S168', 'C478W', CONVERT(DATETIME, '16-02-2014',105));
+insert into detalleordendecompra (numero_de_orden, detalle_id, producto_id_comp, cantidad, descripcion, precio, precio_total) values 
+('S168', 'S1681', 'P127672012', 30, 'Downunder Pinot Noir 2012', 95, 2850),
+('S168', 'S1682', 'P148272013', 24, 'Downunder Pinot Grigio 2013', 100, 2400);
+
+insert into ordendecompra (numero_de_orden, cliente_id, fecha) values
+('S188', 'C777R', CONVERT(DATETIME, '22-04-2014',105));
+insert into detalleordendecompra (numero_de_orden, detalle_id, producto_id_comp, cantidad, descripcion, precio, precio_total) values 
+('S188', 'S1881', 'P127672012', 10, 'Downunder Pinot Noir 2012', 95, 950),
+('S188', 'S1882', 'P148272013', 2, 'Downunder Pinot Grigio 2013', 100, 200),
+('S188', 'S1883','P127652013', 5, 'McDonell Pinot Noir 2013', 160, 800);
+
+
+
+
+
+
+--Datos Orden de Compra y Detalles 2013
+insert into ordendecompra (numero_de_orden, cliente_id, fecha) values
+('S105', 'C479W', CONVERT(DATETIME, '12-11-2013',105));
+insert into detalleordendecompra (numero_de_orden, detalle_id, producto_id_comp, cantidad, descripcion, precio, precio_total) values 
+('S105', 'S1051','P127652013', 15, 'McDonell Pinot Noir 2013', 160, 2400),
+('S105', 'S1052','P148232012', 20, 'Mornington Pinot Grigio 2012', 110, 2200);
+
+insert into ordendecompra (numero_de_orden, cliente_id, fecha) values
+('S110', 'C128R', CONVERT(DATETIME, '15-11-2013', 105));
+insert into detalleordendecompra (numero_de_orden, detalle_id, producto_id_comp, cantidad, descripcion, precio, precio_total) values 
+('S110', 'S1101', 'P127672013', 20, 'Downunder Pinot Noir 2013', 80, 1600);
+
+insert into ordendecompra (numero_de_orden, cliente_id, fecha) values
+('S118', 'C478W', CONVERT(DATETIME, '16-12-2013',105));
+insert into detalleordendecompra (numero_de_orden, detalle_id, producto_id_comp, cantidad, descripcion, precio, precio_total) values 
+('S118', 'S1181', 'P127672012', 15, 'Downunder Pinot Noir 2012', 95, 1425),
+('S118', 'S1182', 'P148272013', 40, 'Downunder Pinot Grigio 2013', 100, 4000);
+
+insert into ordendecompra (numero_de_orden, cliente_id, fecha) values
+('S128', 'C777R', CONVERT(DATETIME, '22-12-2013',105));
+insert into detalleordendecompra (numero_de_orden, detalle_id, producto_id_comp, cantidad, descripcion, precio, precio_total) values 
+('S128', 'S1281', 'P127672012', 15, 'Downunder Pinot Noir 2012', 95, 1425),
+('S128', 'S1282', 'P148272013', 20, 'Downunder Pinot Grigio 2013', 100, 2000),
+('S128', 'S1283','P127652013', 30, 'McDonell Pinot Noir 2013', 160, 4800);
