@@ -1,0 +1,73 @@
+/*==============================================================*/
+/* DBMS name:				Produccion		                    */
+/*==============================================================*/
+
+use master 
+go
+
+drop database  if exists Produccion 
+go
+
+create database Produccion 
+go
+
+use Produccion 
+go
+
+
+/*==============================================================*/
+/* Table: historialdeproduccion                                 */
+/*==============================================================*/
+create table historialdeproduccion (
+   codigo               char(6)              not null,
+   anio                 smallint             not null,
+   volumen_de_produccion int                  not null,
+   costo_por_docena     money                not null
+)
+go
+
+/*==============================================================*/
+/* Table: producto                                              */
+/*==============================================================*/
+create table producto (
+   codigo               char(6)              not null,
+   descripcion          varchar(50)          not null,
+   grupo                varchar(15)          not null,
+   constraint pk_producto primary key (codigo)
+)
+go
+
+alter table historialdeproduccion
+   add constraint fk_historia_tiene_producto foreign key (codigo)
+      references producto (codigo)
+go
+
+
+/*==============================================================*/
+/*			 Datos del Sistema de Produccion                    */
+/*==============================================================*/
+
+--Datos Producto
+insert into producto (codigo, descripcion, grupo) values 
+('12765', 'McDonell Pinot Noir', 'Red'),
+('12766', 'Mornington Pinot Noir', 'Red'),
+('12767', 'Downunder Pinot Noir', 'Red'),
+('12821', 'Mornington Merlot', 'Red'),
+('14821', 'Downunder Merlot', 'Red'),
+('14823', 'Mornington Pinot Grigio', 'White'),
+('14827', 'Downunder Pinot Grigio', 'White');
+
+--Datos Historial de Produccion
+insert into historialdeproduccion (codigo, anio, volumen_de_produccion, costo_por_docena) values
+('12765', 2013, 600, 120),
+('12765', 2012, 580, 110),
+('14823', 2013, 400, 70),
+('14823', 2012, 250, 65),
+('14821', 2013, 550, 100),
+('14821', 2012, 400, 100),
+('12767', 2013, 780, 80),
+('12767', 2012, 690, 85),
+('14827', 2013, 580, 130),
+('14827', 2012, 440, 70),
+('12766', 2013, 800, 70),
+('12766', 2012, 600, 65);
